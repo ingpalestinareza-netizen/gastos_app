@@ -20,6 +20,37 @@ class Gasto {
 
 const categorias = ['Comida', 'Transporte', 'Casa', 'Diversión', 'Otros'];
 
+// Color e icono por categoría: así cada gasto se reconoce de un vistazo.
+IconData iconoCategoria(String categoria) {
+  switch (categoria) {
+    case 'Comida':
+      return Icons.restaurant;
+    case 'Transporte':
+      return Icons.directions_car;
+    case 'Casa':
+      return Icons.home;
+    case 'Diversión':
+      return Icons.movie;
+    default:
+      return Icons.category;
+  }
+}
+
+Color colorCategoria(String categoria) {
+  switch (categoria) {
+    case 'Comida':
+      return Colors.orange;
+    case 'Transporte':
+      return Colors.blue;
+    case 'Casa':
+      return Colors.purple;
+    case 'Diversión':
+      return Colors.pink;
+    default:
+      return Colors.grey;
+  }
+}
+
 class GastoState extends ChangeNotifier {
   GastoState() {
     cargar();
@@ -93,6 +124,11 @@ class MyApp extends StatelessWidget {
         theme: ThemeData(
           useMaterial3: true,
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
+          cardTheme: CardThemeData(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+          ),
         ),
         home: const MyHomePage(),
       ),
@@ -150,7 +186,7 @@ class _MyHomePageState extends State<MyHomePage> {
               ),
               Expanded(
                 child: Container(
-                  color: Theme.of(context).colorScheme.primaryContainer,
+                  color: Theme.of(context).colorScheme.surfaceContainerLowest,
                   child: page,
                 ),
               ),
@@ -169,60 +205,156 @@ class ListaPage extends StatelessWidget {
   Widget build(BuildContext context) {
     var state = context.watch<GastoState>();
 
+    var color = Theme.of(context).colorScheme;
     return Center(
       child: SingleChildScrollView(
-        child: Padding(
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 600),
           padding: const EdgeInsets.all(16),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Tarjeta principal: fondo de color, cifra grande en blanco.
               Card(
+                color: color.primary,
+                elevation: 0,
                 child: Padding(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.all(24),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Total gastado'),
+                      Text(
+                        'Total gastado',
+                        style: TextStyle(color: color.onPrimary.withValues(alpha: 0.85)),
+                      ),
                       Text(
                         '\$${state.total.toStringAsFixed(2)}',
-                        style: Theme.of(context).textTheme.displayMedium,
+                        style: Theme.of(context).textTheme.displayMedium?.copyWith(
+                          color: color.onPrimary,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       const SizedBox(height: 8),
-                      const Text(
-                        'App de práctica: tus gastos se guardan en este dispositivo y ya no se borran al cerrar.',
-                        textAlign: TextAlign.center,
+                      Text(
+                        'Tus gastos se guardan en este dispositivo y ya no se borran al cerrar.',
+                        style: TextStyle(color: color.onPrimary.withValues(alpha: 0.85)),
                       ),
                     ],
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
-              const Text('Por categoría'),
+              const SizedBox(height: 20),
+              Text(
+                'Por categoría',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               const SizedBox(height: 8),
-              for (var categoria in categorias)
-                if (state.totalPorCategoria(categoria) > 0)
-                  ListTile(
-                    title: Text(categoria),
-                    trailing: Text(
-                      '\$${state.totalPorCategoria(categoria).toStringAsFixed(2)}',
-                    ),
+              Card(
+                elevation: 0,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Column(
+                    children: [
+                      for (var categoria in categorias)
+                        if (state.totalPorCategoria(categoria) > 0)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            child: Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    CircleAvatar(
+                                      backgroundColor: colorCategoria(categoria)
+                                          .withValues(alpha: 0.15),
+                                      child: Icon(
+                                        iconoCategoria(categoria),
+                                        color: colorCategoria(categoria),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(child: Text(categoria)),
+                                    Text(
+                                      '${state.total > 0 ? (state.totalPorCategoria(categoria) / state.total * 100).round() : 0}%',
+                                      style: TextStyle(color: color.outline),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Text(
+                                      '\$${state.totalPorCategoria(categoria).toStringAsFixed(2)}',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: LinearProgressIndicator(
+                                    value: state.total > 0
+                                        ? state.totalPorCategoria(categoria) /
+                                              state.total
+                                        : 0,
+                                    backgroundColor: color.surfaceContainerHighest,
+                                    color: colorCategoria(categoria),
+                                    minHeight: 6,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      if (state.gastos.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: Text('Aquí aparecerán tus categorías al agregar gastos.'),
+                        ),
+                    ],
                   ),
-              const SizedBox(height: 16),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Tus gastos',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
               if (state.gastos.isEmpty)
                 const Text('Sin gastos todavía. Agrega el primero en la pestaña Agregar.')
               else
                 for (var gasto in state.gastos)
-                  ListTile(
-                    leading: const Icon(Icons.receipt),
-                    title: Text(gasto.descripcion),
-                    subtitle: Text(gasto.categoria),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('\$${gasto.monto.toStringAsFixed(2)}'),
-                        IconButton(
-                          icon: const Icon(Icons.delete),
-                          onPressed: () => state.quitar(gasto),
+                  Card(
+                    elevation: 0,
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: colorCategoria(gasto.categoria)
+                            .withValues(alpha: 0.15),
+                        child: Icon(
+                          iconoCategoria(gasto.categoria),
+                          color: colorCategoria(gasto.categoria),
                         ),
-                      ],
+                      ),
+                      title: Text(gasto.descripcion),
+                      subtitle: Text(gasto.categoria),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '\$${gasto.monto.toStringAsFixed(2)}',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete),
+                            onPressed: () => state.quitar(gasto),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
             ],
@@ -281,13 +413,25 @@ class _AgregarPageState extends State<AgregarPage> {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Agregar gasto'),
-            const SizedBox(height: 16),
+      child: SingleChildScrollView(
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 600),
+          padding: const EdgeInsets.all(16),
+          child: Card(
+            elevation: 0,
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Agregar gasto',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
             TextField(
               controller: descripcionController,
               decoration: const InputDecoration(
@@ -328,12 +472,18 @@ class _AgregarPageState extends State<AgregarPage> {
             if (error.isNotEmpty)
               Text(error, style: const TextStyle(color: Colors.red)),
             const SizedBox(height: 12),
-            ElevatedButton.icon(
-              onPressed: guardar,
-              icon: const Icon(Icons.check),
-              label: const Text('Guardar'),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: guardar,
+                icon: const Icon(Icons.check),
+                label: const Text('Guardar gasto'),
+              ),
             ),
-          ],
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
