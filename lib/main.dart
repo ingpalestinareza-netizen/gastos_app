@@ -429,9 +429,21 @@ class _AgregarPageState extends State<AgregarPage> {
     var monto = montoValido
         ? double.tryParse(textoMonto.replaceAll(',', '.'))
         : null;
-    if (descripcionController.text.trim().isEmpty || monto == null || monto <= 0) {
+    if (descripcionController.text.trim().isEmpty) {
       setState(() {
-        error = 'Escribe qué compraste y un monto mayor a 0 (máximo 2 decimales).';
+        error = 'Escribe qué compraste.';
+      });
+      return;
+    }
+    if (!montoValido) {
+      setState(() {
+        error = 'El monto no es válido: usa solo números con máximo 2 decimales.';
+      });
+      return;
+    }
+    if (monto == null || monto <= 0) {
+      setState(() {
+        error = 'El monto debe ser mayor a 0.';
       });
       return;
     }
