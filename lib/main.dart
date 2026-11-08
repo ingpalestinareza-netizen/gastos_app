@@ -57,41 +57,52 @@ class GastoState extends ChangeNotifier {
   }
 
   final gastos = <Gasto>[];
+  Gasto? _ultimoEliminado;
+  var _indiceUltimoEliminado = -1;
 
   // Al abrir la app, lee los gastos guardados en el teléfono/navegador.
+  // Parche de Nemotron 3 Ultra (8-nov-2026): si la lectura falla, no se rompe la app.
   Future<void> cargar() async {
-    var prefs = await SharedPreferences.getInstance();
-    var guardados = prefs.getStringList('gastos') ?? [];
-    gastos
-      ..clear()
-      ..addAll(
-        guardados.map((texto) {
-          var json = jsonDecode(texto) as Map<String, dynamic>;
-          return Gasto(
-            descripcion: json['descripcion'] as String,
-            monto: (json['monto'] as num).toDouble(),
-            categoria: json['categoria'] as String,
-          );
-        }),
-      );
-    notifyListeners();
+    try {
+      var prefs = await SharedPreferences.getInstance();
+      var guardados = prefs.getStringList('gastos') ?? [];
+      gastos
+        ..clear()
+        ..addAll(
+          guardados.map((texto) {
+            var json = jsonDecode(texto) as Map<String, dynamic>;
+            return Gasto(
+              descripcion: json['descripcion'] as String,
+              monto: (json['monto'] as num).toDouble(),
+              categoria: json['categoria'] as String,
+            );
+          }),
+        );
+      notifyListeners();
+    } catch (_) {
+      gastos.clear();
+      notifyListeners();
+    }
   }
 
   // Después de cada cambio, escribe la lista completa en el guardado local.
   Future<void> guardar() async {
-    var prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(
-      'gastos',
-      gastos
-          .map(
-            (g) => jsonEncode({
-              'descripcion': g.descripcion,
-              'monto': g.monto,
-              'categoria': g.categoria,
-            }),
-          )
-          .toList(),
-    );
+    try {
+      var prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(
+        'gastos',
+        gastos
+            .map(
+              (g) => jsonEncode({
+                'version': 1,
+                'descripcion': g.descripcion,
+                'monto': g.monto,
+                'categoria': g.categoria,
+              }),
+            )
+            .toList(),
+      );
+    } catch (_) {}
   }
 
   double get total => gastos.fold(0, (suma, g) => suma + g.monto);
@@ -106,9 +117,23 @@ class GastoState extends ChangeNotifier {
   }
 
   void quitar(Gasto gasto) {
-    gastos.remove(gasto);
-    guardar();
-    notifyListeners();
+    _indiceUltimoEliminado = gastos.indexOf(gasto);
+    if (_indiceUltimoEliminado >= 0) {
+      _ultimoEliminado = gasto;
+      gastos.removeAt(_indiceUltimoEliminado);
+      guardar();
+      notifyListeners();
+    }
+  }
+
+  void deshacerEliminacion() {
+    if (_ultimoEliminado != null && _indiceUltimoEliminado >= 0) {
+      gastos.insert(_indiceUltimoEliminado, _ultimoEliminado!);
+      _ultimoEliminado = null;
+      _indiceUltimoEliminado = -1;
+      guardar();
+      notifyListeners();
+    }
   }
 }
 
@@ -351,7 +376,19 @@ class ListaPage extends StatelessWidget {
                           ),
                           IconButton(
                             icon: const Icon(Icons.delete),
-                            onPressed: () => state.quitar(gasto),
+                            onPressed: () {
+                              state.quitar(gasto);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: const Text('Gasto eliminado.'),
+                                  duration: const Duration(seconds: 4),
+                                  action: SnackBarAction(
+                                    label: 'Deshacer',
+                                    onPressed: () => state.deshacerEliminacion(),
+                                  ),
+                                ),
+                              );
+                            },
                           ),
                         ],
                       ),
@@ -386,10 +423,15 @@ class _AgregarPageState extends State<AgregarPage> {
   }
 
   void guardar() {
-    var monto = double.tryParse(montoController.text.replaceAll(',', '.'));
+    var textoMonto = montoController.text.trim();
+    // Solo números con hasta 2 decimales y un solo separador (coma o punto).
+    var montoValido = RegExp(r'^\d+([.,]\d{1,2})?$').hasMatch(textoMonto);
+    var monto = montoValido
+        ? double.tryParse(textoMonto.replaceAll(',', '.'))
+        : null;
     if (descripcionController.text.trim().isEmpty || monto == null || monto <= 0) {
       setState(() {
-        error = 'Escribe qué compraste y un monto mayor a 0.';
+        error = 'Escribe qué compraste y un monto mayor a 0 (máximo 2 decimales).';
       });
       return;
     }
