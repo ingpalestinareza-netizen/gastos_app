@@ -51,6 +51,29 @@ Color colorCategoria(String categoria) {
   }
 }
 
+// Validación compartida por agregar y editar: misma regla, mismo mensaje.
+// Devuelve el mensaje de error, o null si descripción y monto están bien.
+String? validarGasto(String descripcion, String textoMonto) {
+  if (descripcion.trim().isEmpty) {
+    return 'Escribe qué compraste.';
+  }
+  var texto = textoMonto.trim();
+  // Solo números con hasta 2 decimales y un solo separador (coma o punto).
+  var montoValido = RegExp(r'^\d+([.,]\d{1,2})?$').hasMatch(texto);
+  if (!montoValido) {
+    return 'El monto no es válido: usa solo números con máximo 2 decimales.';
+  }
+  var monto = double.tryParse(texto.replaceAll(',', '.'));
+  if (monto == null || monto <= 0) {
+    return 'El monto debe ser mayor a 0.';
+  }
+  return null;
+}
+
+// Convierte el texto del monto a número. Usar solo después de validar.
+double parseMonto(String textoMonto) =>
+    double.parse(textoMonto.trim().replaceAll(',', '.'));
+
 class GastoState extends ChangeNotifier {
   GastoState() {
     cargar();
@@ -114,6 +137,15 @@ class GastoState extends ChangeNotifier {
     gastos.add(gasto);
     guardar();
     notifyListeners();
+  }
+
+  // Reemplaza el gasto en esa posición por el nuevo y lo guarda.
+  void editar(int indice, Gasto nuevo) {
+    if (indice >= 0 && indice < gastos.length) {
+      gastos[indice] = nuevo;
+      guardar();
+      notifyListeners();
+    }
   }
 
   void quitar(Gasto gasto) {
@@ -375,6 +407,20 @@ class ListaPage extends StatelessWidget {
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                           IconButton(
+                            icon: const Icon(Icons.edit),
+                            tooltip: 'Editar',
+                            onPressed: () {
+                              var indice = state.gastos.indexOf(gasto);
+                              showDialog(
+                                context: context,
+                                builder: (context) => EditarGastoDialog(
+                                  indice: indice,
+                                  gasto: gasto,
+                                ),
+                              );
+                            },
+                          ),
+                          IconButton(
                             icon: const Icon(Icons.delete),
                             onPressed: () {
                               state.quitar(gasto);
@@ -423,30 +469,17 @@ class _AgregarPageState extends State<AgregarPage> {
   }
 
   void guardar() {
-    var textoMonto = montoController.text.trim();
-    // Solo números con hasta 2 decimales y un solo separador (coma o punto).
-    var montoValido = RegExp(r'^\d+([.,]\d{1,2})?$').hasMatch(textoMonto);
-    var monto = montoValido
-        ? double.tryParse(textoMonto.replaceAll(',', '.'))
-        : null;
-    if (descripcionController.text.trim().isEmpty) {
+    var errorValidacion = validarGasto(
+      descripcionController.text,
+      montoController.text,
+    );
+    if (errorValidacion != null) {
       setState(() {
-        error = 'Escribe qué compraste.';
+        error = errorValidacion;
       });
       return;
     }
-    if (!montoValido) {
-      setState(() {
-        error = 'El monto no es válido: usa solo números con máximo 2 decimales.';
-      });
-      return;
-    }
-    if (monto == null || monto <= 0) {
-      setState(() {
-        error = 'El monto debe ser mayor a 0.';
-      });
-      return;
-    }
+    var monto = parseMonto(montoController.text);
     context.read<GastoState>().agregar(
       Gasto(
         descripcion: descripcionController.text.trim(),
@@ -540,6 +573,129 @@ class _AgregarPageState extends State<AgregarPage> {
           ),
         ),
       ),
+    );
+  }
+}
+
+// Ventana para editar un gasto: abre con los datos actuales ya escritos.
+class EditarGastoDialog extends StatefulWidget {
+  const EditarGastoDialog({
+    super.key,
+    required this.indice,
+    required this.gasto,
+  });
+
+  final int indice;
+  final Gasto gasto;
+
+  @override
+  State<EditarGastoDialog> createState() => _EditarGastoDialogState();
+}
+
+class _EditarGastoDialogState extends State<EditarGastoDialog> {
+  late final descripcionController = TextEditingController(
+    text: widget.gasto.descripcion,
+  );
+  late final montoController = TextEditingController(
+    text: widget.gasto.monto.toStringAsFixed(2),
+  );
+  late var categoria = widget.gasto.categoria;
+  var error = '';
+
+  @override
+  void dispose() {
+    descripcionController.dispose();
+    montoController.dispose();
+    super.dispose();
+  }
+
+  void guardarCambios() {
+    var errorValidacion = validarGasto(
+      descripcionController.text,
+      montoController.text,
+    );
+    if (errorValidacion != null) {
+      setState(() {
+        error = errorValidacion;
+      });
+      return;
+    }
+    context.read<GastoState>().editar(
+      widget.indice,
+      Gasto(
+        descripcion: descripcionController.text.trim(),
+        monto: parseMonto(montoController.text),
+        categoria: categoria,
+      ),
+    );
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Gasto actualizado.')),
+    );
+    Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Editar gasto'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: descripcionController,
+              decoration: const InputDecoration(
+                labelText: '¿Qué compraste?',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: montoController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: 'Monto',
+                prefixText: '\$',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              initialValue: categoria,
+              decoration: const InputDecoration(
+                labelText: 'Categoría',
+                border: OutlineInputBorder(),
+              ),
+              items: [
+                for (var c in categorias)
+                  DropdownMenuItem(value: c, child: Text(c)),
+              ],
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() {
+                    categoria = value;
+                  });
+                }
+              },
+            ),
+            if (error.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(error, style: const TextStyle(color: Colors.red)),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton.icon(
+          onPressed: guardarCambios,
+          icon: const Icon(Icons.check),
+          label: const Text('Guardar cambios'),
+        ),
+      ],
     );
   }
 }

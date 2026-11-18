@@ -2,7 +2,7 @@
 
 App de gastos de Jhonny, marca propia, solo de práctica: no se conecta a
 ninguna cuenta ni banco. Agrega gastos (qué, monto, categoría), ve el total
-y los totales por categoría, y borra gastos. Los datos se guardan en el
+y los totales por categoría, borra gastos y edita los ya guardados. Los datos se guardan en el
 dispositivo con `shared_preferences` y ya no se borran al cerrar.
 
 ## App publicada
